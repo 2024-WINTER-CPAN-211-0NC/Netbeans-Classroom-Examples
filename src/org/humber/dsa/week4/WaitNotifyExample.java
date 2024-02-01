@@ -1,51 +1,82 @@
 package org.humber.dsa.week4;
 
-class SharedResource {
-    private boolean signalSentFlag = false;
-
-    public synchronized void waitForSignal() {
-        while (!signalSentFlag) {
-            try {
-                System.out.println("WAIT WAIT WAIT");
-                wait(20000); // Wait until a signal is received
-            } catch (InterruptedException e) {
-                System.out.println(e);
-            }
-        }
-        System.out.println("Signal received.");
+class Message {
+    private String message;
+    public String getMessage() {
+        return message;
     }
-
-    public synchronized void sendSignal() {
-        signalSentFlag = true;
-        notifyAll(); // Notify waiting threads that the signal is received
-        System.out.println("Signal sent.");
+    public void setMessage(String message) {
+        this.message = message;
     }
 }
 
+class Producer implements Runnable {
+    private final Message message;
+    public Producer(Message message) {
+        this.message = message;
+    }
+    @Override
+    public void run() {
+        System.out.println("Producer started...");
+        synchronized (message) {
+            try {
+                Thread.sleep(500);
+                System.out.println("Producing message...");
+                Thread.sleep(2000);
+                message.setMessage("Hello World!");
+                message.notify();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        System.out.println("Producer completed.");
+    }
+}
+
+class Consumer implements Runnable {
+    private final Message message;
+    public Consumer(Message message) {
+        this.message = message;
+    }
+    @Override
+    public void run() {
+        System.out.println("Consumer started...");
+        synchronized (message) {
+            while (message.getMessage() == null){
+                try {
+                    System.out.println("Message is not available yet. Waiting...");
+                    message.wait();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            System.out.println("Consumer has consumed the message: " + message.getMessage());
+        }
+        System.out.println("Consumer completed.");
+    }
+}
 public class WaitNotifyExample {
 
     public static void main(String[] args) {
-        SharedResource sharedResource = new SharedResource();
+        try {
+            Message message = new Message();
 
-        Thread waitingThread = new Thread(() -> {
-            System.out.println("Waiting thread is waiting for a signal.");
-            sharedResource.waitForSignal();
-            System.out.println("Waiting thread has completed.");
-        });
-        Thread waitingThread2 = new Thread(() -> {
-            System.out.println("Waiting thread2 is waiting for a signal.");
-            sharedResource.waitForSignal();
-            System.out.println("Waiting thread2 has resumed.");
-        });
+            Consumer consumer = new Consumer(message);
+            Thread consumerThread = new Thread(consumer);
+            consumerThread.start();
 
-        Thread signalingThread = new Thread(() -> {
-            System.out.println("Signaling thread is sending a signal.");
-            sharedResource.sendSignal();
-            System.out.println("Signaling thread has finished.");
-        });
+            Thread.sleep(1000); //Giving 5 secs for Producer to start
 
-        waitingThread.start();
-        waitingThread2.start();
-        signalingThread.start();
+            Producer producer = new Producer(message);
+            Thread producerThread = new Thread(producer);
+            producerThread.start();
+
+            producerThread.join();
+            consumerThread.join();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        System.out.println("Main thread is done.");
     }
 }
